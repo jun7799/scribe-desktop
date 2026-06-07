@@ -1,0 +1,8 @@
+build/bin
+node_modules
+frontend/dist
+sidecar/*.exe
+sidecar/wx-dl-*
+__pycache__/
+*.db
+*.log
