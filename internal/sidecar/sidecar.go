@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,11 @@ func (m *Manager) SetLogCallback(fn func(line string)) {
 // SetExitCallback 设置退出回调
 func (m *Manager) SetExitCallback(fn func()) {
 	m.onExit = fn
+}
+
+// EnsureCertInstalled 确保证书已安装（仅 Windows 需要提权）
+func (m *Manager) EnsureCertInstalled() error {
+	return ensureCertInstalled(m.binaryPath)
 }
 
 // EnsureExtracted 将嵌入的二进制提取到数据目录
@@ -103,13 +109,24 @@ func (m *Manager) Start(downloadDir string, proxyPort int) error {
 	}
 
 	args := []string{
-		"--hostname", "0.0.0.0",
+		"--hostname", "127.0.0.1",
 		"--port", fmt.Sprintf("%d", proxyPort),
 		"--config", configPath,
 	}
 
-	cmd := exec.Command(m.binaryPath, args...)
+	binaryPath := m.binaryPath
+	// 检查二进制文件是否存在
+	if _, err := os.Stat(binaryPath); err != nil {
+		return fmt.Errorf("二进制文件不存在: %s", binaryPath)
+	}
+
+	cmd := exec.Command(binaryPath, args...)
 	configureCmd(cmd)
+
+	// 输出启动信息到日志
+	if m.onLogLine != nil {
+		m.onLogLine(fmt.Sprintf("[INFO] 启动: %s %v", binaryPath, args))
+	}
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
@@ -172,12 +189,15 @@ func (m *Manager) IsRunning() bool {
 
 // WaitReady 等待 API 就绪
 func (m *Manager) WaitReady(apiPort int, timeout time.Duration) bool {
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}
-	url := fmt.Sprintf("http://127.0.0.1:%d/api/status", apiPort)
+	transport := &http.Transport{
+		Proxy: func(req *http.Request) (*url.URL, error) { return nil, nil },
+	}
+	client := &http.Client{Timeout: 2 * time.Second, Transport: transport}
+	apiURL := fmt.Sprintf("http://127.0.0.1:%d/api/status", apiPort)
 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		resp, err := client.Get(url)
+		resp, err := client.Get(apiURL)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == 200 {

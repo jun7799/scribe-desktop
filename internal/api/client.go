@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -39,13 +40,12 @@ type Client struct {
 
 // NewClient 创建 API 客户端
 func NewClient(apiPort int) *Client {
-	// Transport.Proxy = nil 绕过系统代理，避免循环
 	return &Client{
 		baseURL: fmt.Sprintf("http://127.0.0.1:%d", apiPort),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 			Transport: &http.Transport{
-				Proxy: nil,
+				Proxy: func(req *http.Request) (*url.URL, error) { return nil, nil },
 			},
 		},
 	}

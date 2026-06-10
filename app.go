@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"scribe-desktop/internal/api"
 	"scribe-desktop/internal/config"
@@ -67,16 +68,32 @@ func (a *App) startup(ctx context.Context) {
 
 // StartProxy 启动代理服务
 func (a *App) StartProxy() error {
+	// 先确保 sidecar 二进制存在
+	if err := a.sidecar.EnsureExtracted(); err != nil {
+		return fmt.Errorf("Sidecar 准备失败: %s", err.Error())
+	}
+
+	// 首次运行需要安装 CA 证书（会触发 UAC 提权）
+	wailsRuntime.EventsEmit(a.ctx, "log:line", "[INFO] 检查证书...")
+	if err := a.sidecar.EnsureCertInstalled(); err != nil {
+		return fmt.Errorf("证书安装失败（需要管理员权限）: %s", err.Error())
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "log:line", "[INFO] 正在启动代理服务...")
+
 	if err := a.sidecar.Start(a.config.DownloadDir, a.config.ProxyPort); err != nil {
-		return err
+		return fmt.Errorf("启动进程失败: %s", err.Error())
 	}
 
-	// 等待就绪
-	if !a.sidecar.WaitReady(a.config.ApiPort, 15) {
+	// 等待就绪（wx-dl API 端口 2022，代理端口 2023）
+	wailsRuntime.EventsEmit(a.ctx, "log:line", "[INFO] 等待 API 就绪...")
+	if !a.sidecar.WaitReady(a.config.ApiPort, 15*time.Second) {
+		wailsRuntime.EventsEmit(a.ctx, "log:line", "[ERROR] API 在 15 秒内未就绪，检查日志查看原因")
 		a.sidecar.Stop()
-		return fmt.Errorf("代理服务启动超时")
+		return fmt.Errorf("代理服务启动超时 (API 端口 %d 未响应)", a.config.ApiPort)
 	}
 
+	wailsRuntime.EventsEmit(a.ctx, "log:line", "[OK] 代理服务已就绪")
 	wailsRuntime.EventsEmit(a.ctx, "service:status", a.GetStatus())
 	return nil
 }
