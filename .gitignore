@@ -6,3 +6,4 @@ sidecar/wx-dl-*
 __pycache__/
 *.db
 *.log
+.DS_Store
