@@ -3,52 +3,47 @@
 ## 当前状态
 
 - ✅ Windows 版本已完成，可正常使用
-- ⬜ macOS 版本需要开发
+- ✅ macOS 版本已完成（Apple Silicon）
 
 ## macOS 适配待办
 
-### 1. 准备 wx-dl macOS 二进制
+### 1. 准备 wx-dl macOS 二进制 ✅
 
-从 [wx_channels_download Releases](https://github.com/ltaoo/wx_channels_download/releases) 下载两个版本：
+从 [wx_channels_download Releases](https://github.com/ltaoo/wx_channels_download/releases) 下载：
 
-- `wx-dl-darwin-amd64` — Intel Mac
-- `wx-dl-darwin-arm64` — Apple Silicon (M1/M2/M3)
+- `wx-dl-darwin-arm64` — Apple Silicon (M1/M2/M3) ✅ 已添加
+- `wx-dl-darwin-amd64` — Intel Mac ⬜ 暂未添加（按需补充）
 
 放到项目的 `sidecar/` 目录下：
 
 ```
 sidecar/
 ├── wx-dl-windows-amd64.exe   ← 已有
-├── wx-dl-darwin-amd64        ← 需要添加
-└── wx-dl-darwin-arm64        ← 需要添加
+├── wx-dl-darwin-arm64        ← 已添加
+└── wx-dl-darwin-amd64        ← 按需补充
 ```
 
 > `sidecar.go` 里的 `embeddedBinaryName()` 已经处理了这两个文件名，不需要改代码。
 
-### 2. macOS 证书自动安装
+### 2. macOS 证书自动安装 ✅
 
-参考 `sidecar_windows.go` 中的 `ensureCertInstalled()` 实现，需要在 `sidecar_darwin.go` 中实现 macOS 版本：
+已在 `sidecar_darwin.go` 中实现：
 
-- wx-dl 在 macOS 上同样需要安装 CA 证书到系统 Keychain
-- 使用 `security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain <cert.pem>` 命令
-- 需要 `sudo` 权限，可以用 `osascript -e 'do shell script "..." with administrator privileges'` 弹出系统密码框提权
-- 检测证书是否已安装：`security find-certificate -c "wx-dl" /Library/Keychains/System.keychain`
+- `certInstalled()` — 通过 `security find-certificate` 检查系统钥匙串和用户钥匙串
+- `ensureCertInstalled()` — 未安装时触发提权安装
+- `runElevated()` — 使用 `osascript` 弹出系统密码框提权（等同于 Windows UAC）
 
-### 3. macOS 构建配置
+### 3. macOS 构建配置 ✅
 
-- `build/darwin/` 目录下可能需要配置 `Info.plist`（权限声明等）
-- macOS 需要处理 `xattr` 问题（下载的二进制被 macOS 标记为未信任）：
-  ```bash
-  xattr -cr wx-dl-darwin-*
-  ```
-  `sidecar.go` 的 `EnsureExtracted()` 里已有这行代码
+- `build/darwin/Info.plist` 已配置，包含 `NSAppTransportSecurity` 允许本地网络访问
+- `sidecar.go` 的 `EnsureExtracted()` 已处理 `xattr -cr` 和 `chmod 0755`
 
-### 4. macOS 代理设置
+### 4. macOS 代理设置 ✅
 
 - wx-dl 在 macOS 上会自动设置系统代理（和 Windows 类似）
-- 如果代理设置不生效，可能需要检查 macOS 的网络代理配置
+- 通用逻辑已在 `sidecar.go` 中实现，跨平台一致
 
-### 5. 打包测试
+### 5. 打包测试 ⬜
 
 在 Mac 上执行：
 
@@ -65,7 +60,7 @@ wails build
 
 构建产物在 `build/bin/` 目录下。
 
-### 6. wails build 构建钩子
+### 6. wails build 构建钩子 ⬜
 
 当前 `wails build` 后需要手动复制 sidecar 二进制。建议在 `wails.json` 中添加构建钩子：
 
